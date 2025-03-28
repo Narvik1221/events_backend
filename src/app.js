@@ -67,10 +67,9 @@ db.sequelize
   .sync({ alter: true })
   .then(async () => {
     await createAdminUser();
-    // app.listen(PORT, "0.0.0.0", () => {
-    //   console.log(`Сервер запущен на порту ${PORT}`);
-    // });
-    module.exports = app;
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Сервер запущен на порту ${PORT}`);
+    });
   })
   .catch((err) => {
     console.error("Ошибка подключения к базе данных:", err);
