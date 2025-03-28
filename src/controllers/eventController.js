@@ -99,6 +99,7 @@ exports.createEvent = async (req, res) => {
     return res.status(400).json({ message: "Отсутствуют обязательные поля" });
   }
 
+  // Здесь req.file.path содержит URL, полученный из Vercel Blobs
   const avatar = req.file ? req.file.path : null;
   console.log(req.body);
 
@@ -122,7 +123,6 @@ exports.createEvent = async (req, res) => {
         return res.status(400).json({ message: "Неверный формат категорий" });
       }
       if (Array.isArray(parsedCategoryIds) && parsedCategoryIds.length > 0) {
-        // Приводим каждый элемент к числу и фильтруем невалидные значения
         const validCategoryIds = parsedCategoryIds
           .map((id) => Number(id))
           .filter((id) => !isNaN(id) && id > 0);

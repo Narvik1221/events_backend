@@ -1,18 +1,10 @@
+// middlewares/upload.js
 const multer = require("multer");
-const fs = require("fs");
+const { put } = require("@vercel/blob");
 const path = require("path");
 
-// Функция для проверки наличия директории и её создания при необходимости
-const ensureDirExists = (dir) => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-};
-
-// Создаём папки для хранения файлов
-const UPLOADS_DIR = path.join(__dirname, "../../uploads");
-ensureDirExists(path.join(UPLOADS_DIR, "users"));
-ensureDirExists(path.join(UPLOADS_DIR, "events"));
+// Используем память для хранения файлов
+const storage = multer.memoryStorage();
 
 // Фильтр для изображений
 const fileFilter = (req, file, cb) => {
@@ -23,36 +15,42 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Ограничения по размеру файла (5MB)
+// Ограничение по размеру файла – 5MB
 const limits = { fileSize: 5 * 1024 * 1024 };
 
-// Функция генерации имени файла
+const upload = multer({ storage, fileFilter, limits });
+
+// Функция генерации уникального имени файла
 const generateFileName = (file) =>
   `${Date.now()}-${file.originalname.replace(/\s+/g, "_")}`;
 
-// Настройки хранения аватаров пользователей
-const userStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(UPLOADS_DIR, "users")),
-  filename: (req, file, cb) => cb(null, generateFileName(file)),
-});
+// Функция загрузки файла в Vercel Blobs
+// Согласно инструкции: import { put } from '@vercel/blob';
+async function uploadFileToBlob(fileBuffer, originalName) {
+  const fileName = generateFileName({ originalname: originalName });
+  // Загрузка файла по пути 'uploads/events/<fileName>' с публичным доступом
+  const { url } = await put(`uploads/events/${fileName}`, fileBuffer, {
+    access: "public",
+  });
+  return url;
+}
 
-// Настройки хранения изображений мероприятий
-const eventStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(UPLOADS_DIR, "events")),
-  filename: (req, file, cb) => cb(null, generateFileName(file)),
-});
-
-const userAvatarUpload = multer({ storage: userStorage, fileFilter, limits });
-const eventAvatarUpload = multer({ storage: eventStorage, fileFilter, limits });
-
-// Middleware для обработки ошибок Multer
-const uploadErrorHandler = (err, req, res, next) => {
-  if (err instanceof multer.MulterError) {
-    return res.status(400).json({ message: `Ошибка загрузки: ${err.message}` });
-  } else if (err) {
-    return res.status(400).json({ message: err.message });
+// Middleware: после загрузки файла multer, загружаем его в Blob и сохраняем URL в req.file.path
+const handleFileUpload = async (req, res, next) => {
+  if (req.file) {
+    try {
+      const url = await uploadFileToBlob(
+        req.file.buffer,
+        req.file.originalname
+      );
+      req.file.path = url;
+      next();
+    } catch (error) {
+      next(error);
+    }
+  } else {
+    next();
   }
-  next();
 };
 
-module.exports = { userAvatarUpload, eventAvatarUpload, uploadErrorHandler };
+module.exports = { upload, handleFileUpload };
