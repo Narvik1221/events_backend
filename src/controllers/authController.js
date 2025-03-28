@@ -46,6 +46,9 @@ exports.login = async (req, res) => {
     if (!valid) {
       return res.status(400).json({ message: "Неверные учетные данные" });
     }
+    if (user.blocked) {
+      return res.status(400).json({ message: "Ваш аккаунт заблокирован" });
+    }
     // Выдаем accessToken на 15 минут и refreshToken на 7 дней
     const accessToken = jwt.sign(
       { id: user.id, admin: user.admin },
@@ -57,7 +60,7 @@ exports.login = async (req, res) => {
       REFRESH_SECRET,
       { expiresIn: "14d" }
     );
-    res.json({ accessToken, refreshToken });
+    res.json({ accessToken, refreshToken, admin: user.admin });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Ошибка авторизации" });

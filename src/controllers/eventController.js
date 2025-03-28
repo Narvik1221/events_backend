@@ -1,11 +1,13 @@
-// controllers/eventController.js
 const db = require("../models");
+const { Op, cast, col } = require("sequelize");
 
 exports.getEvents = async (req, res) => {
-  const { categoryId } = req.query; // Получаем параметр categoryId из query
-
+  const { categoryId, search, userLat, userLng, radius } = req.query; // Новые параметры для поиска по радиусу
+  console.log("getEvents", req.query);
   try {
+    // Формируем объект опций для поиска
     const filterOptions = {
+      where: {},
       include: [
         {
           model: db.User,
@@ -14,12 +16,36 @@ exports.getEvents = async (req, res) => {
         },
         {
           model: db.Category,
-          as: "categories", // Включаем категории в запрос
+          as: "categories",
         },
       ],
     };
 
-    // Если categoryId передан, добавляем фильтрацию
+    // Если параметр search передан, добавляем условия поиска по нескольким полям
+    if (search) {
+      filterOptions.where = {
+        [Op.or]: [
+          { name: { [Op.iLike]: `%${search}%` } },
+          { description: { [Op.iLike]: `%${search}%` } },
+          // Приводим numeric поля к тексту для поиска
+          db.sequelize.where(cast(col("Event.latitude"), "text"), {
+            [Op.iLike]: `%${search}%`,
+          }),
+          db.sequelize.where(cast(col("Event.longitude"), "text"), {
+            [Op.iLike]: `%${search}%`,
+          }),
+          // Даты также приводим к тексту
+          db.sequelize.where(cast(col("Event.startDate"), "text"), {
+            [Op.iLike]: `%${search}%`,
+          }),
+          db.sequelize.where(cast(col("Event.endDate"), "text"), {
+            [Op.iLike]: `%${search}%`,
+          }),
+        ],
+      };
+    }
+
+    // Если передан categoryId – фильтруем мероприятия по категории
     if (categoryId) {
       filterOptions.include.push({
         model: db.Category,
@@ -27,7 +53,24 @@ exports.getEvents = async (req, res) => {
         where: { id: categoryId },
       });
     }
+    console.log("userLat && userLng && radius", userLat, userLng, radius);
+    // Если переданы параметры геолокации и радиуса – фильтруем по расстоянию
+    if (userLat && userLng && radius) {
+      const lat = parseFloat(userLat);
+      const lng = parseFloat(userLng);
+      const rad = parseFloat(radius);
 
+      if (!isNaN(lat) && !isNaN(lng) && !isNaN(rad)) {
+        // Формула гаверсина для расчёта расстояния (в км)
+        const distanceCondition = `(6371 * acos(cos(radians(${lat})) * cos(radians("Event"."latitude")) * cos(radians("Event"."longitude") - radians(${lng})) + sin(radians(${lat})) * sin(radians("Event"."latitude")))) < ${rad}`;
+        // Оборачиваем условие в массив для объединения с другими условиями через Op.and
+        filterOptions.where = {
+          ...filterOptions.where,
+          [Op.and]: [db.sequelize.literal(distanceCondition)],
+        };
+      }
+    }
+    console.log("filterOptions", filterOptions);
     const events = await db.Event.findAll(filterOptions);
 
     const formattedEvents = events.map((event) => ({
@@ -41,7 +84,6 @@ exports.getEvents = async (req, res) => {
     res.status(500).json({ message: "Ошибка получения мероприятий" });
   }
 };
-
 exports.createEvent = async (req, res) => {
   const {
     name,
@@ -131,5 +173,178 @@ exports.joinEvent = async (req, res) => {
   } catch (error) {
     console.error("Ошибка при записи на мероприятие:", error);
     return res.status(500).json({ message: "Внутренняя ошибка сервера" });
+  }
+};
+
+exports.getUserEvents = async (req, res) => {
+  try {
+    const userId = req.user.id; // Получаем ID текущего пользователя
+
+    // Получаем все мероприятия, в которых участвует пользователь
+    const events = await db.Event.findAll({
+      include: {
+        model: db.User,
+        as: "participants", // Используйте ассоциацию, установленную выше
+        where: { id: userId },
+        required: true, // Это обязательная ассоциация
+      },
+    });
+
+    if (!events || events.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "У вас нет записанных мероприятий" });
+    }
+
+    // Возвращаем список мероприятий
+    return res.status(200).json(events);
+  } catch (error) {
+    console.error("Ошибка при получении мероприятий пользователя:", error);
+    return res.status(500).json({ message: "Внутренняя ошибка сервера" });
+  }
+};
+exports.leaveEvent = async (req, res) => {
+  try {
+    const eventId = parseInt(req.params.eventId, 10);
+
+    if (isNaN(eventId)) {
+      return res.status(400).json({ message: "Некорректный ID мероприятия" });
+    }
+
+    const userId = req.user.id; // Получаем ID текущего пользователя
+
+    // Проверяем, записан ли пользователь на мероприятие
+    const participation = await db.EventParticipant.findOne({
+      where: { eventId, userId },
+    });
+
+    if (!participation) {
+      return res
+        .status(400)
+        .json({ message: "Вы не записаны на это мероприятие" });
+    }
+
+    // Удаляем запись о пользователе в EventParticipant
+    await db.EventParticipant.destroy({
+      where: { eventId, userId },
+    });
+
+    return res.status(200).json({ message: "Вы успешно вышли из мероприятия" });
+  } catch (error) {
+    console.error("Ошибка при выходе из мероприятия:", error);
+    return res.status(500).json({ message: "Внутренняя ошибка сервера" });
+  }
+};
+exports.updateEvent = async (req, res) => {
+  const { id } = req.params;
+  const {
+    name,
+    startDate,
+    endDate,
+    latitude,
+    longitude,
+    description,
+    categoryIds, // Получаем категории как JSON-строку
+  } = req.body;
+
+  const avatar = req.file ? req.file.path : null;
+
+  try {
+    const event = await db.Event.findByPk(id);
+    if (!event) {
+      return res.status(404).json({ message: "Мероприятие не найдено" });
+    }
+
+    // Обновляем поля (если переданы новые данные)
+    event.name = name || event.name;
+    event.startDate = startDate || event.startDate;
+    event.endDate = endDate || event.endDate;
+    event.latitude = latitude || event.latitude;
+    event.longitude = longitude || event.longitude;
+    event.description = description || event.description;
+    if (avatar) {
+      event.avatar = avatar;
+    }
+    await event.save();
+
+    if (categoryIds) {
+      let parsedCategoryIds;
+      try {
+        parsedCategoryIds = JSON.parse(categoryIds);
+      } catch (parseError) {
+        return res.status(400).json({ message: "Неверный формат категорий" });
+      }
+      if (Array.isArray(parsedCategoryIds) && parsedCategoryIds.length > 0) {
+        const validCategoryIds = parsedCategoryIds
+          .map((id) => Number(id))
+          .filter((id) => !isNaN(id) && id > 0);
+        if (validCategoryIds.length > 0) {
+          await event.setCategories(validCategoryIds);
+        }
+      }
+    }
+
+    res
+      .status(200)
+      .json({ message: "Мероприятие обновлено", eventId: event.id });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Ошибка обновления мероприятия" });
+  }
+};
+exports.getMyEvents = async (req, res) => {
+  try {
+    const userId = req.user.id; // Получаем ID текущего пользователя
+
+    // Находим все мероприятия, где пользователь является создателем
+    const events = await db.Event.findAll({
+      where: { creatorId: userId },
+      include: [
+        {
+          model: db.Category,
+          as: "categories",
+        },
+        {
+          model: db.User,
+          as: "participants",
+          attributes: ["id"],
+        },
+      ],
+    });
+
+    if (!events || events.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "У вас нет созданных мероприятий" });
+    }
+
+    const formattedEvents = events.map((event) => ({
+      ...event.toJSON(),
+      participantCount: event.participants ? event.participants.length : 0,
+    }));
+
+    return res.status(200).json(formattedEvents);
+  } catch (error) {
+    console.error("Ошибка при получении созданных мероприятий:", error);
+    return res.status(500).json({ message: "Внутренняя ошибка сервера" });
+  }
+};
+
+exports.deleteEvent = async (req, res) => {
+  const eventId = req.params.id;
+
+  try {
+    const event = await db.Event.findByPk(eventId);
+    if (!event) {
+      return res.status(404).json({ message: "Мероприятие не найдено" });
+    }
+
+    // Удаляем мероприятие
+    await event.destroy();
+
+    res.json({ message: "Мероприятие успешно удалено" });
+  } catch (error) {
+    console.error("Ошибка удаления мероприятия:", error);
+    res.status(500).json({ message: "Ошибка сервера" });
   }
 };

@@ -3,7 +3,24 @@ const bodyParser = require("body-parser");
 const cors = require("cors"); // Добавлено для поддержки CORS
 const db = require("./models");
 require("dotenv").config();
+const bcrypt = require("bcryptjs");
 
+async function createAdminUser() {
+  const adminExists = await db.User.findOne({ where: { admin: true } });
+
+  if (!adminExists) {
+    const hashedPassword = await bcrypt.hash("admin", 10);
+
+    await db.User.create({
+      firstName: "admin",
+      lastName: "admin",
+      password: hashedPassword,
+      admin: true,
+    });
+
+    console.log("Администратор создан.");
+  }
+}
 // Импорт роутов
 const authRoutes = require("./routes/authRoutes");
 const eventRoutes = require("./routes/eventRoutes");
@@ -36,7 +53,8 @@ app.use("/api/categories", categoryRoutes);
 // Синхронизация базы данных и запуск сервера
 db.sequelize
   .sync({ alter: true })
-  .then(() => {
+  .then(async () => {
+    await createAdminUser();
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Сервер запущен на порту ${PORT}`);
     });

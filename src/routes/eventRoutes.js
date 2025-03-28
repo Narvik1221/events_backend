@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const eventController = require("../controllers/eventController");
-const { authenticateToken } = require("../middlewares/auth");
+const { authenticateToken, isAdmin } = require("../middlewares/auth");
 const { eventAvatarUpload } = require("../middlewares/upload");
 
 // Получение всех мероприятий
@@ -11,8 +11,28 @@ router.get("/", eventController.getEvents);
 router.post(
   "/",
   authenticateToken,
-  eventAvatarUpload.single("avatar"), // Здесь multer обрабатывает файл
+  eventAvatarUpload.single("avatar"),
   eventController.createEvent
 );
+
+// Запись на мероприятие
 router.post("/:eventId/join", authenticateToken, eventController.joinEvent);
+
+// Выход из мероприятия
+router.delete("/:eventId/leave", authenticateToken, eventController.leaveEvent);
+
+router.get("/user", authenticateToken, eventController.getUserEvents);
+// Обновление мероприятия
+router.put(
+  "/:id",
+  authenticateToken,
+  eventAvatarUpload.single("avatar"),
+  eventController.updateEvent
+);
+
+// Получение мероприятий, созданных пользователем
+router.get("/my", authenticateToken, eventController.getMyEvents);
+
+router.delete("/:id", authenticateToken, isAdmin, eventController.deleteEvent);
+
 module.exports = router;

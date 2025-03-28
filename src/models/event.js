@@ -15,11 +15,11 @@ module.exports = (sequelize, DataTypes) => {
     },
     // Координаты мероприятия на карте
     latitude: {
-      type: DataTypes.DECIMAL(10, 7),
+      type: DataTypes.DOUBLE, // Изменено с DECIMAL на DOUBLE
       allowNull: false,
     },
     longitude: {
-      type: DataTypes.DECIMAL(10, 7),
+      type: DataTypes.DOUBLE, // Изменено с DECIMAL на DOUBLE
       allowNull: false,
     },
     description: {
@@ -35,5 +35,6 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true,
     },
   });
+
   return Event;
 };
