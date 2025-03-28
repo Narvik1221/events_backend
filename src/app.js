@@ -51,6 +51,18 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/profile", profileRoutes);
 app.use("/api/categories", categoryRoutes);
 // Синхронизация базы данных и запуск сервера
+
+const fs = require("fs");
+
+app.get("/list-uploads", (req, res) => {
+  const uploadsDir = path.join(__dirname, "uploads", "events");
+  fs.readdir(uploadsDir, (err, files) => {
+    if (err) {
+      return res.status(500).json({ error: "Не удалось прочитать папку" });
+    }
+    res.json({ files });
+  });
+});
 db.sequelize
   .sync({ alter: true })
   .then(async () => {
