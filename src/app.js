@@ -4,7 +4,7 @@ const cors = require("cors"); // Добавлено для поддержки CO
 const db = require("./models");
 require("dotenv").config();
 const bcrypt = require("bcryptjs");
-
+const path = require("path");
 async function createAdminUser() {
   const adminExists = await db.User.findOne({ where: { admin: true } });
 
@@ -41,7 +41,7 @@ app.use(
 );
 
 app.use(bodyParser.json());
-app.use("/uploads", express.static("uploads"));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Роутинг
 app.use("/api", authRoutes);
