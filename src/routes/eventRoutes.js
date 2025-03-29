@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const eventController = require("../controllers/eventController");
 const { authenticateToken, isAdmin } = require("../middlewares/auth");
-const { eventAvatarUpload } = require("../middlewares/upload");
+const { upload, uploadFileToCloudinary } = require("../middlewares/upload");
 
 // Получение всех мероприятий
 router.get("/", eventController.getEvents);
@@ -11,7 +11,8 @@ router.get("/", eventController.getEvents);
 router.post(
   "/",
   authenticateToken,
-  eventAvatarUpload.single("avatar"),
+  upload.single("avatar"),
+  uploadFileToCloudinary,
   eventController.createEvent
 );
 
@@ -26,7 +27,7 @@ router.get("/user", authenticateToken, eventController.getUserEvents);
 router.put(
   "/:id",
   authenticateToken,
-  eventAvatarUpload.single("avatar"),
+  upload.single("avatar"),
   eventController.updateEvent
 );
 

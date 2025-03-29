@@ -1,58 +1,61 @@
+// middlewares/cloudinaryUpload.js
 const multer = require("multer");
-const fs = require("fs");
-const path = require("path");
+const cloudinary = require("cloudinary").v2;
+const streamifier = require("streamifier");
 
-// Функция для проверки наличия директории и её создания при необходимости
-const ensureDirExists = (dir) => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
+// Настройка Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME, // Например: "mycloud"
+  api_key: process.env.CLOUDINARY_API_KEY, // Например: "123456789012345"
+  api_secret: process.env.CLOUDINARY_API_SECRET, // Например: "abcdefg123456"
+});
+
+// Используем multer с хранением файла в памяти
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    // Разрешаем только изображения
+    if (file.mimetype.startsWith("image/")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Разрешены только изображения"), false);
+    }
+  },
+  limits: { fileSize: 5 * 1024 * 1024 }, // Ограничение 5MB
+});
+
+// Функция для загрузки файла в Cloudinary через поток
+const streamUpload = (buffer) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder: "events" }, // Можно указать нужную папку в Cloudinary
+      (error, result) => {
+        if (result) {
+          resolve(result);
+        } else {
+          reject(error);
+        }
+      }
+    );
+    streamifier.createReadStream(buffer).pipe(stream);
+  });
 };
 
-// Создаём папки для хранения файлов
-const UPLOADS_DIR = path.join(__dirname, "../../uploads");
-ensureDirExists(path.join(UPLOADS_DIR, "users"));
-ensureDirExists(path.join(UPLOADS_DIR, "events"));
-
-// Фильтр для изображений
-const fileFilter = (req, file, cb) => {
-  if (file.mimetype.startsWith("image/")) {
-    cb(null, true);
+// Middleware, который после работы multer (файл в памяти) загружает его в Cloudinary
+const uploadFileToCloudinary = async (req, res, next) => {
+  if (req.file) {
+    try {
+      const result = await streamUpload(req.file.buffer);
+      // Сохраняем URL загруженного файла в req.file.path
+      req.file.path = result.secure_url;
+      next();
+    } catch (error) {
+      next(error);
+    }
   } else {
-    cb(new Error("Разрешены только изображения"), false);
+    next();
   }
 };
 
-// Ограничения по размеру файла (5MB)
-const limits = { fileSize: 5 * 1024 * 1024 };
-
-// Функция генерации имени файла
-const generateFileName = (file) =>
-  `${Date.now()}-${file.originalname.replace(/\s+/g, "_")}`;
-
-// Настройки хранения аватаров пользователей
-const userStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(UPLOADS_DIR, "users")),
-  filename: (req, file, cb) => cb(null, generateFileName(file)),
-});
-
-// Настройки хранения изображений мероприятий
-const eventStorage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(UPLOADS_DIR, "events")),
-  filename: (req, file, cb) => cb(null, generateFileName(file)),
-});
-
-const userAvatarUpload = multer({ storage: userStorage, fileFilter, limits });
-const eventAvatarUpload = multer({ storage: eventStorage, fileFilter, limits });
-
-// Middleware для обработки ошибок Multer
-const uploadErrorHandler = (err, req, res, next) => {
-  if (err instanceof multer.MulterError) {
-    return res.status(400).json({ message: `Ошибка загрузки: ${err.message}` });
-  } else if (err) {
-    return res.status(400).json({ message: err.message });
-  }
-  next();
-};
-
-module.exports = { userAvatarUpload, eventAvatarUpload, uploadErrorHandler };
+module.exports = { upload, uploadFileToCloudinary };
