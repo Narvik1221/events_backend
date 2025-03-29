@@ -2,7 +2,7 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const cors = require("cors");
-const db = require("./models");
+const db = require("./src/models");
 require("dotenv").config();
 const bcrypt = require("bcryptjs");
 const path = require("path");
@@ -23,12 +23,12 @@ async function createAdminUser() {
 }
 
 // Импорт роутов
-const authRoutes = require("./routes/authRoutes");
-const eventRoutes = require("./routes/eventRoutes");
-const favoriteRoutes = require("./routes/favoriteRoutes");
-const adminRoutes = require("./routes/adminRoutes");
-const profileRoutes = require("./routes/profileRoutes");
-const categoryRoutes = require("./routes/categoryRoutes");
+const authRoutes = require("./src/routes/authRoutes");
+const eventRoutes = require("./src/routes/eventRoutes");
+const favoriteRoutes = require("./src/routes/favoriteRoutes");
+const adminRoutes = require("./src/routes/adminRoutes");
+const profileRoutes = require("./src/routes/profileRoutes");
+const categoryRoutes = require("./src/routes/categoryRoutes");
 
 const app = express();
 
