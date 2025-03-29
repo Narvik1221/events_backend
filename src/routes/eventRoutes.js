@@ -2,10 +2,7 @@ const express = require("express");
 const router = express.Router();
 const eventController = require("../controllers/eventController");
 const { authenticateToken, isAdmin } = require("../middlewares/auth");
-const {
-  eventAvatarUpload,
-  handleFileUpload,
-} = require("../middlewares/upload");
+const { upload, handleFileUpload } = require("../middlewares/upload");
 
 // Получение всех мероприятий
 router.get("/", eventController.getEvents);
@@ -14,7 +11,7 @@ router.get("/", eventController.getEvents);
 router.post(
   "/",
   authenticateToken,
-  eventAvatarUpload.single("avatar"), // multer обрабатывает файл и сохраняет в памяти
+  upload.single("avatar"), // multer обрабатывает файл и сохраняет в памяти
   handleFileUpload, // Загружает файл в Vercel Blobs и записывает URL в req.file.path
   eventController.createEvent
 );
@@ -30,7 +27,7 @@ router.get("/user", authenticateToken, eventController.getUserEvents);
 router.put(
   "/:id",
   authenticateToken,
-  eventAvatarUpload.single("avatar"),
+  upload.single("avatar"),
   eventController.updateEvent
 );
 

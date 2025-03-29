@@ -8,15 +8,10 @@ const {
   getUsers,
 } = require("../controllers/profileController");
 const { authenticateToken, isAdmin } = require("../middlewares/auth"); // Проверка JWT
-const { userAvatarUpload } = require("../middlewares/upload");
+const { upload } = require("../middlewares/upload");
 // Защищённый маршрут профиля
 router.get("/", authenticateToken, getProfile);
-router.put(
-  "/",
-  authenticateToken,
-  userAvatarUpload.single("avatar"),
-  updateProfile
-);
+router.put("/", authenticateToken, upload.single("avatar"), updateProfile);
 router.delete("/", authenticateToken, deleteProfile); // Маршрут удаления профиля
 
 // Новый маршрут для получения всех пользователей
