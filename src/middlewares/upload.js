@@ -29,7 +29,7 @@ const upload = multer({
 const streamUpload = (buffer) => {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
-      { folder: "events" }, // Можно указать нужную папку в Cloudinary
+      { folder: "events" },
       (error, result) => {
         if (result) {
           resolve(result);
@@ -42,13 +42,14 @@ const streamUpload = (buffer) => {
   });
 };
 
-// Middleware, который после работы multer (файл в памяти) загружает его в Cloudinary
+// Middleware для загрузки файла в Cloudinary
 const uploadFileToCloudinary = async (req, res, next) => {
   if (req.file) {
     try {
       const result = await streamUpload(req.file.buffer);
-      // Сохраняем URL загруженного файла в req.file.path
+      // Сохраняем URL и public_id загруженного файла
       req.file.path = result.secure_url;
+      req.file.public_id = result.public_id;
       next();
     } catch (error) {
       next(error);
@@ -58,4 +59,17 @@ const uploadFileToCloudinary = async (req, res, next) => {
   }
 };
 
-module.exports = { upload, uploadFileToCloudinary };
+// Функция для удаления файла из Cloudinary
+const deleteFileFromCloudinary = (publicId) => {
+  return new Promise((resolve, reject) => {
+    cloudinary.uploader.destroy(publicId, (error, result) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve(result);
+      }
+    });
+  });
+};
+
+module.exports = { upload, uploadFileToCloudinary, deleteFileFromCloudinary };

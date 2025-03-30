@@ -18,7 +18,7 @@ const getProfile = async (req, res) => {
 };
 const updateProfile = async (req, res) => {
   const { firstName, lastName, telegram, whatsapp } = req.body;
-  const avatar = req.file ? `/uploads/users/${req.file.filename}` : undefined;
+  const avatar = req.file ? req.file.path : null;
 
   try {
     const user = await db.User.findByPk(req.user.id);
@@ -76,7 +76,25 @@ const getUsers = async (req, res) => {
     res.status(500).json({ message: "Ошибка сервера" });
   }
 };
-
+const getEventParticipants = async (req, res) => {
+  const { eventId } = req.params;
+  try {
+    const event = await db.Event.findByPk(eventId, {
+      include: {
+        model: db.User,
+        as: "participants",
+        attributes: { exclude: ["password"] },
+      },
+    });
+    if (!event) {
+      return res.status(404).json({ message: "Мероприятие не найдено" });
+    }
+    res.json(event.participants);
+  } catch (error) {
+    console.error("Ошибка при получении участников мероприятия:", error);
+    res.status(500).json({ message: "Ошибка сервера" });
+  }
+};
 const toggleUserBlock = async (req, res) => {
   const { id } = req.params;
   const { blocked } = req.body;
@@ -106,4 +124,5 @@ module.exports = {
   deleteProfile,
   toggleUserBlock,
   getUsers,
+  getEventParticipants,
 };

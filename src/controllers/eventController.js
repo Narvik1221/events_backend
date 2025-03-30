@@ -1,11 +1,11 @@
 const db = require("../models");
 const { Op, cast, col } = require("sequelize");
-
+const { deleteFileFromCloudinary } = require("../middlewares/upload");
 exports.getEvents = async (req, res) => {
-  const { categoryId, search, userLat, userLng, radius } = req.query; // Новые параметры для поиска по радиусу
+  const { categoryId, search, userLat, userLng, radius, eventStatus } =
+    req.query;
   console.log("getEvents", req.query);
   try {
-    // Формируем объект опций для поиска
     const filterOptions = {
       where: {},
       include: [
@@ -21,20 +21,17 @@ exports.getEvents = async (req, res) => {
       ],
     };
 
-    // Если параметр search передан, добавляем условия поиска по нескольким полям
     if (search) {
       filterOptions.where = {
         [Op.or]: [
           { name: { [Op.iLike]: `%${search}%` } },
           { description: { [Op.iLike]: `%${search}%` } },
-          // Приводим numeric поля к тексту для поиска
           db.sequelize.where(cast(col("Event.latitude"), "text"), {
             [Op.iLike]: `%${search}%`,
           }),
           db.sequelize.where(cast(col("Event.longitude"), "text"), {
             [Op.iLike]: `%${search}%`,
           }),
-          // Даты также приводим к тексту
           db.sequelize.where(cast(col("Event.startDate"), "text"), {
             [Op.iLike]: `%${search}%`,
           }),
@@ -45,7 +42,6 @@ exports.getEvents = async (req, res) => {
       };
     }
 
-    // Если передан categoryId – фильтруем мероприятия по категории
     if (categoryId) {
       filterOptions.include.push({
         model: db.Category,
@@ -53,37 +49,52 @@ exports.getEvents = async (req, res) => {
         where: { id: categoryId },
       });
     }
-    console.log("userLat && userLng && radius", userLat, userLng, radius);
-    // Если переданы параметры геолокации и радиуса – фильтруем по расстоянию
+
     if (userLat && userLng && radius) {
       const lat = parseFloat(userLat);
       const lng = parseFloat(userLng);
       const rad = parseFloat(radius);
-
       if (!isNaN(lat) && !isNaN(lng) && !isNaN(rad)) {
-        // Формула гаверсина для расчёта расстояния (в км)
         const distanceCondition = `(6371 * acos(cos(radians(${lat})) * cos(radians("Event"."latitude")) * cos(radians("Event"."longitude") - radians(${lng})) + sin(radians(${lat})) * sin(radians("Event"."latitude")))) < ${rad}`;
-        // Оборачиваем условие в массив для объединения с другими условиями через Op.and
         filterOptions.where = {
           ...filterOptions.where,
           [Op.and]: [db.sequelize.literal(distanceCondition)],
         };
       }
     }
+
+    // Фильтрация по статусу мероприятия
+    if (eventStatus) {
+      const now = new Date();
+      if (eventStatus === "current") {
+        // Текущие мероприятия: начались и еще не закончились
+        filterOptions.where = {
+          ...filterOptions.where,
+          startDate: { [Op.lte]: now },
+          endDate: { [Op.gte]: now },
+        };
+      } else if (eventStatus === "upcoming") {
+        // Предстоящие мероприятия: еще не начались
+        filterOptions.where = {
+          ...filterOptions.where,
+          startDate: { [Op.gt]: now },
+        };
+      }
+    }
+
     console.log("filterOptions", filterOptions);
     const events = await db.Event.findAll(filterOptions);
-
     const formattedEvents = events.map((event) => ({
       ...event.toJSON(),
       participantCount: event.participants.length,
     }));
-
     res.json(formattedEvents);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Ошибка получения мероприятий" });
   }
 };
+
 exports.createEvent = async (req, res) => {
   const {
     name,
@@ -339,7 +350,19 @@ exports.deleteEvent = async (req, res) => {
       return res.status(404).json({ message: "Мероприятие не найдено" });
     }
 
-    // Удаляем мероприятие
+    // Если у мероприятия есть avatar, удаляем изображение из Cloudinary
+    if (event.avatar) {
+      // Извлекаем public_id из URL. Предполагается, что URL имеет вид:
+      // "https://res.cloudinary.com/<cloud_name>/image/upload/v<version>/<folder>/<public_id>.<ext>"
+      const regex = /\/upload\/(?:v\d+\/)?(.+)\.[a-zA-Z]+/;
+      const match = event.avatar.match(regex);
+      if (match && match[1]) {
+        const publicId = match[1];
+        await deleteFileFromCloudinary(publicId);
+      }
+    }
+
+    // Удаляем мероприятие из базы
     await event.destroy();
 
     res.json({ message: "Мероприятие успешно удалено" });

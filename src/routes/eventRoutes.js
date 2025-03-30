@@ -34,6 +34,12 @@ router.put(
 // Получение мероприятий, созданных пользователем
 router.get("/my", authenticateToken, eventController.getMyEvents);
 
-router.delete("/:id", authenticateToken, isAdmin, eventController.deleteEvent);
+router.delete(
+  "/:id",
+  authenticateToken,
+  isAdmin,
+
+  eventController.deleteEvent
+);
 
 module.exports = router;
