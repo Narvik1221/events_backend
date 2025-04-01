@@ -28,6 +28,7 @@ router.put(
   "/:id",
   authenticateToken,
   upload.single("avatar"),
+  uploadFileToCloudinary,
   eventController.updateEvent
 );
 
@@ -41,5 +42,5 @@ router.delete(
 
   eventController.deleteEvent
 );
-
+router.delete("/user/:id", authenticateToken, eventController.deleteUserEvent);
 module.exports = router;

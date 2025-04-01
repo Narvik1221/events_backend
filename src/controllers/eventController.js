@@ -4,7 +4,7 @@ const { deleteFileFromCloudinary } = require("../middlewares/upload");
 exports.getEvents = async (req, res) => {
   const { categoryId, search, userLat, userLng, radius, eventStatus } =
     req.query;
-  console.log("getEvents", req.query);
+
   try {
     const filterOptions = {
       where: {},
@@ -82,7 +82,6 @@ exports.getEvents = async (req, res) => {
       }
     }
 
-    console.log("filterOptions", filterOptions);
     const events = await db.Event.findAll(filterOptions);
     const formattedEvents = events.map((event) => ({
       ...event.toJSON(),
@@ -111,7 +110,6 @@ exports.createEvent = async (req, res) => {
   }
 
   const avatar = req.file ? req.file.path : null;
-  console.log(req.body);
 
   try {
     const event = await db.Event.create({
@@ -369,5 +367,32 @@ exports.deleteEvent = async (req, res) => {
   } catch (error) {
     console.error("Ошибка удаления мероприятия:", error);
     res.status(500).json({ message: "Ошибка сервера" });
+  }
+};
+exports.deleteUserEvent = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const event = await db.Event.findByPk(id);
+    if (!event) {
+      return res.status(404).json({ message: "Мероприятие не найдено" });
+    }
+    const userId = req.user.id;
+
+    if (event.creatorId !== userId) {
+      return res
+        .status(403)
+        .json({ message: "Нет прав для удаления данного мероприятия" });
+    }
+
+    if (event.avatar) {
+      await deleteFileFromCloudinary(event.avatar);
+    }
+
+    await event.destroy();
+    res.json({ message: "Мероприятие успешно удалено" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Ошибка удаления мероприятия" });
   }
 };
