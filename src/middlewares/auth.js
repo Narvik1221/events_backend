@@ -6,13 +6,12 @@ const REFRESH_SECRET = process.env.REFRESH_SECRET || "your_refresh_secret";
 
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers["authorization"];
-  // Ожидается формат: "Bearer <token>"
+
   const token = authHeader && authHeader.split(" ")[1];
   if (!token) return res.status(401).json({ message: "Отсутствует токен" });
 
   jwt.verify(token, SECRET_KEY, (err, user) => {
     if (err) {
-      // Если токен истёк, пробуем обновить его с помощью refresh token
       if (err.name === "TokenExpiredError") {
         const refreshToken = req.headers["x-refresh-token"];
         if (!refreshToken) {
@@ -30,14 +29,12 @@ const authenticateToken = (req, res, next) => {
             });
           }
 
-          // Генерируем новый access token
           const newAccessToken = jwt.sign(
             { id: decoded.id, email: decoded.email },
             SECRET_KEY,
             { expiresIn: "15m" }
           );
 
-          // Отправляем новый access token в заголовке
           res.setHeader("x-access-token", newAccessToken);
           req.user = decoded;
           next();

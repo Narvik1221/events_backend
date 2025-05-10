@@ -396,3 +396,26 @@ exports.deleteUserEvent = async (req, res) => {
     res.status(500).json({ message: "Ошибка удаления мероприятия" });
   }
 };
+
+exports.getEventCreator = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const event = await db.Event.findByPk(id, {
+      include: {
+        model: db.User,
+        as: "creator",
+        attributes: { exclude: ["password"] },
+      },
+    });
+
+    if (!event) {
+      return res.status(404).json({ message: "Событие не найдено" });
+    }
+
+    res.json(event.creator);
+  } catch (error) {
+    console.error("Ошибка при получении создателя:", error);
+    res.status(500).json({ message: "Ошибка сервера" });
+  }
+};

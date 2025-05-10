@@ -43,4 +43,6 @@ router.delete(
   eventController.deleteEvent
 );
 router.delete("/user/:id", authenticateToken, eventController.deleteUserEvent);
+
+router.get("/:id/creator", authenticateToken, eventController.getEventCreator);
 module.exports = router;
